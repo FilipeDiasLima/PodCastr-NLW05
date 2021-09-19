@@ -1,12 +1,13 @@
 import { GetStaticPaths, GetStaticProps } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import Head from 'next/head';
 import { convertDurationToTimeString } from '../../util/convertDurationToTimeString';
 import { format, parseISO } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR'
 import api from '../../services/api';
-
 import styles from './episode.module.scss';
+import { usePlayer } from '../../contexts/PlayerContext';
 
 type Episode = {
   id: string;
@@ -24,9 +25,25 @@ type EpisodeProps = {
   episode: Episode
 }
 
+// NEXT => CLIENTE(BROWSER) - NEXT.JS(NODE.JS) - SERVER(BACK-END)
+// FALLBACK => TRUE --------- BLOCKING
 export default function Episode({ episode }: EpisodeProps) {
+
+  // const router = useRouter();
+
+  // // caso esteja em loading retorne algo, assim quando o next tentar renderizar o html
+  // // sem informação, nao irá dar erro no build.
+  // if(router.isFallback) {
+  //   return <p>Carregando...</p>
+  // }
+
+  const { play } = usePlayer();
+
   return (
     <div className={styles.episode}>
+      <Head>
+        <title>{episode.title} | PodCastr</title>
+      </Head>
       <div className={styles.thumbnailContainer}>
         <Link href='/'>
           <button type='button'>
@@ -39,7 +56,7 @@ export default function Episode({ episode }: EpisodeProps) {
           src={episode.thumbnail}
           objectFit='cover'
         />
-        <button type='button'>
+        <button type='button' onClick={() => play(episode)}>
           <img src="/play.svg" alt="Tocar episódio"/>
         </button>
       </div>
@@ -57,12 +74,30 @@ export default function Episode({ episode }: EpisodeProps) {
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  return {
-    paths: [
-      {
-        params: { slug: 'ss' }
+  const { data } = await api.get('episodes', {
+    params: {
+      _limit: 2,
+      _sort: 'published_at',
+      _order: 'desc'
+    }
+  })
+
+  const paths = data.map(episode => {
+    return {
+      params: {
+        slug: episode.id
       }
-    ],
+    }
+  })
+
+  return {
+    // no build com paths vazio nenhuma ep é gerando estaticamente
+    paths,
+    // comportamento de uma pag que nao foi gerada estaticamente
+    // gerando apenas os que estao no PATHS
+    // False: retorna 404
+    // True: Tenta buscar e criar uma pagina estática e salvar em disco => requisição Client Side(Browser)
+    // Blocking: Redirecionar apenas quando a página estiver carregada
     fallback: 'blocking'
   }
 }
